@@ -1,0 +1,60 @@
+version: '3.3'
+
+services:
+  db:
+    build: ./db
+    container_name: postgres
+    ports:
+      - "127.0.0.1:5433:5432"
+    environment:
+      - "POSTGRES_PASSWORD=password"
+      - "POSTGRES_USER=postgres"
+      - "POSTGRES_DB=postgres"
+    networks:
+      - loadbalancing
+
+  ms-product:
+    build:
+      context: ./ms-product
+      dockerfile: src/main/docker/Dockerfile.jvm
+    environment:
+      - "DATABASE.URL=jdbc:postgresql://db:5432/postgres?autoReconnect=true"
+      - "DATABASE.USERNAME=postgres"
+      - "DATABASE.PASSWORD=password"
+    depends_on:
+      - db
+    deploy:
+      mode: replicated
+      replicas: 2
+    networks:
+      - loadbalancing
+
+  ms-category:
+    build:
+      context: ./ms-category
+      dockerfile: src/main/docker/Dockerfile.jvm
+    ports:
+      - "8083:8080"
+    environment:
+      - "DATABASE.URL=jdbc:postgresql://db:5432/postgres"
+      - "DATABASE.USERNAME=postgres"
+      - "DATABASE.PASSWORD=password"
+      - "MS-PRODUCT.URL=http://nginx:80"
+    depends_on:
+      - ms-product
+    networks:
+      - loadbalancing
+
+  nginx:
+    build: ./nginx
+    container_name: nginx
+    ports:
+      - "8082:80"
+    networks:
+      - loadbalancing
+    depends_on:
+      - ms-category
+      - ms-product
+
+networks:
+  loadbalancing:
